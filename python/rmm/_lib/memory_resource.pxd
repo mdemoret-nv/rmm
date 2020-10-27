@@ -1,10 +1,12 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libc.stdint cimport int8_t
 from libcpp.vector cimport vector
 from libcpp.string cimport string
 from libcpp.memory cimport shared_ptr
-
+from libcpp.functional cimport function
+from rmm._lib.lib cimport cudaStream_t
 
 cdef extern from "memory_resource_wrappers.hpp" nogil:
     cdef cppclass device_memory_resource_wrapper:
@@ -67,6 +69,20 @@ cdef extern from "memory_resource_wrappers.hpp" nogil:
         ) except +
         void flush() except +
 
+    cdef cppclass callback_resource_adaptor_wrapper(
+        device_memory_resource_wrapper
+    ):
+        ctypedef function[void(bool, void*, size_t, cudaStream_t)] c_callback
+        ctypedef void (*cy_callback) (void*, bool, void*, size_t, cudaStream_t)
+
+        @staticmethod
+        c_callback make_std_function(cy_callback, void*)
+
+        callback_resource_adaptor_wrapper(
+            shared_ptr[device_memory_resource_wrapper] upstream_mr,
+            c_callback callback
+        ) except +
+
     cdef cppclass thread_safe_resource_adaptor_wrapper(
         device_memory_resource_wrapper
     ):
@@ -102,3 +118,9 @@ cdef class LoggingResourceAdaptor(MemoryResource):
     cdef object _log_file_name
     cpdef get_file_name(self)
     cpdef flush(self)
+
+cdef class CallbackResourceAdaptor(MemoryResource):
+    cdef object _py_callback
+    cdef void _cy_callback(self, bool isAlloc, void* p, size_t bytes, cudaStream_t stream) with gil
+
+    cpdef set_callback(self, object py_callback)

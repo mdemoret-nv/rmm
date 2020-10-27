@@ -3,7 +3,7 @@ import os
 import warnings
 from collections import defaultdict
 
-from libc.stdint cimport int8_t
+from libc.stdint cimport int8_t, uintptr_t
 from libcpp cimport bool
 from libcpp.cast cimport dynamic_cast
 from libcpp.memory cimport make_shared, make_unique, shared_ptr, unique_ptr
@@ -281,6 +281,43 @@ cdef class LoggingResourceAdaptor(MemoryResource):
 
     cpdef get_file_name(self):
         return self._log_file_name
+
+
+cdef class CallbackResourceAdaptor(MemoryResource):
+
+    def __cinit__(self, MemoryResource upstream, object py_callback):
+
+        self.c_obj.reset(
+            new callback_resource_adaptor_wrapper(
+                upstream.c_obj,
+                callback_resource_adaptor_wrapper.make_std_function(<callback_resource_adaptor_wrapper.cy_callback>self._cy_callback, <void*>self)
+            )
+        )
+
+        self._py_callback = None
+
+    def __init__(self, MemoryResource upstream, object py_callback):
+        """
+        Memory resource that logs information about allocations/deallocations
+        performed by an upstream memory resource.
+
+        Parameters
+        ----------
+        upstream : MemoryResource
+            The upstream memory resource.
+        log_file_name : str
+            Path to the file to which logs are written.
+        """
+        self._py_callback = py_callback
+
+    cdef void _cy_callback(self, bool isAlloc, void* p, size_t bytes, cudaStream_t stream) with gil:
+
+        if (self._py_callback is not None):
+            self._py_callback(isAlloc, <uintptr_t>p, bytes, <uintptr_t>stream)
+
+    cpdef set_callback(self, object py_callback):
+
+        self._py_callback = py_callback
 
 
 class KeyInitializedDefaultDict(defaultdict):

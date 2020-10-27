@@ -6,6 +6,7 @@
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/fixed_size_memory_resource.hpp>
 #include <rmm/mr/device/logging_resource_adaptor.hpp>
+#include <rmm/mr/device/callback_resource_adaptor.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
@@ -159,6 +160,37 @@ class logging_resource_adaptor_wrapper : public device_memory_resource_wrapper {
  private:
   std::shared_ptr<device_memory_resource_wrapper> upstream_mr;
   std::shared_ptr<rmm::mr::logging_resource_adaptor<rmm::mr::device_memory_resource>> mr;
+};
+
+class callback_resource_adaptor_wrapper : public device_memory_resource_wrapper {
+ public:
+
+  typedef rmm::mr::callback_resource_adaptor<rmm::mr::device_memory_resource>::callback_func_t c_callback;
+  using cy_callback = void (*)(void* c_self, bool isAlloc, void* p, std::size_t bytes, cudaStream_t stream);
+
+  callback_resource_adaptor_wrapper(std::shared_ptr<device_memory_resource_wrapper> upstream_mr,
+                                    c_callback callback)
+    : upstream_mr(upstream_mr),
+      mr(std::make_shared<rmm::mr::callback_resource_adaptor<rmm::mr::device_memory_resource>>(
+        upstream_mr->get_mr().get(), callback))
+  {
+  }
+
+  std::shared_ptr<rmm::mr::device_memory_resource> get_mr() { return mr; }
+
+  static c_callback make_std_function(cy_callback callback, void* c_self)
+  {
+    c_callback wrapper = [=](bool isAlloc, void* p, std::size_t bytes, cudaStream_t stream) -> void
+    {
+        callback(c_self, isAlloc, p, bytes, stream);
+    };
+    
+    return wrapper;
+  }
+
+ private:
+  std::shared_ptr<device_memory_resource_wrapper> upstream_mr;
+  std::shared_ptr<rmm::mr::callback_resource_adaptor<rmm::mr::device_memory_resource>> mr;
 };
 
 class thread_safe_resource_adaptor_wrapper : public device_memory_resource_wrapper {
