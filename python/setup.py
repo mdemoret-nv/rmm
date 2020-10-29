@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import sysconfig
+import distutils.file_util
 from distutils.sysconfig import get_python_lib
 
 from Cython.Build import cythonize
@@ -71,9 +72,11 @@ for file_p in preprocess_files:
     pxi_file = pxi_file + ".pxi"
 
     if CUDA_VERSION in supported_cuda_versions:
-        shutil.copyfile(
-            os.path.join(cwd, "rmm/_cuda", CUDA_VERSION, pxi_file),
+        # Only update the file if it does not exist or is newer
+        distutils.file_util.copy_file(
+            os.path.join(cwd, "rmm/_cuda", CUDA_VERSION, pxi_file), 
             os.path.join(cwd, "rmm/_cuda", file_p),
+            update=True
         )
     else:
         raise TypeError(f"{CUDA_VERSION} is not supported.")
