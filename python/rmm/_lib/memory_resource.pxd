@@ -83,6 +83,24 @@ cdef extern from "memory_resource_wrappers.hpp" nogil:
             c_callback callback
         ) except +
 
+    cdef cppclass tracked_resource_adaptor_wrapper(
+        device_memory_resource_wrapper
+    ):
+        struct tracked_info:
+            tracked_info()
+
+            size_t outstanding_nbytes
+            size_t peak_nbytes
+            size_t total_nbytes
+            size_t total_count
+
+        tracked_resource_adaptor_wrapper(
+            shared_ptr[device_memory_resource_wrapper] upstream_mr
+        ) except +
+
+        void reset_info() except +
+        tracked_info get_info() except +
+
     cdef cppclass thread_safe_resource_adaptor_wrapper(
         device_memory_resource_wrapper
     ):
@@ -121,6 +139,11 @@ cdef class LoggingResourceAdaptor(MemoryResource):
 
 cdef class CallbackResourceAdaptor(MemoryResource):
     cdef object _py_callback
-    cdef void _cy_callback(self, bool isAlloc, void* p, size_t bytes, cudaStream_t stream) with gil
+    cdef void _cy_callback(self, bool isAlloc, void* p, size_t bytes, cudaStream_t stream) except *
 
     cpdef set_callback(self, object py_callback)
+
+cdef class TrackedResourceAdaptor(MemoryResource):
+
+    cpdef reset_info(self)
+    # def get_info(self) -> dict

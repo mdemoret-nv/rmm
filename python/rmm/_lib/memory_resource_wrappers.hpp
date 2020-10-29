@@ -7,6 +7,7 @@
 #include <rmm/mr/device/fixed_size_memory_resource.hpp>
 #include <rmm/mr/device/logging_resource_adaptor.hpp>
 #include <rmm/mr/device/callback_resource_adaptor.hpp>
+#include <rmm/mr/device/tracked_resource_adaptor.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
@@ -191,6 +192,33 @@ class callback_resource_adaptor_wrapper : public device_memory_resource_wrapper 
  private:
   std::shared_ptr<device_memory_resource_wrapper> upstream_mr;
   std::shared_ptr<rmm::mr::callback_resource_adaptor<rmm::mr::device_memory_resource>> mr;
+};
+
+class tracked_resource_adaptor_wrapper : public device_memory_resource_wrapper {
+ public:
+
+  typedef rmm::mr::tracked_resource_adaptor<rmm::mr::device_memory_resource>::tracked_info tracked_info;
+
+  tracked_resource_adaptor_wrapper(std::shared_ptr<device_memory_resource_wrapper> upstream_mr)
+    : upstream_mr(upstream_mr),
+      mr(std::make_shared<rmm::mr::tracked_resource_adaptor<rmm::mr::device_memory_resource>>(
+        upstream_mr->get_mr().get()))
+  {
+  }
+
+  std::shared_ptr<rmm::mr::device_memory_resource> get_mr() { return mr; }
+
+  void reset_info() {
+    mr->reset_info();
+  }
+
+  tracked_info get_info() const {
+    return mr->get_info();
+  }
+
+ private:
+  std::shared_ptr<device_memory_resource_wrapper> upstream_mr;
+  std::shared_ptr<rmm::mr::tracked_resource_adaptor<rmm::mr::device_memory_resource>> mr;
 };
 
 class thread_safe_resource_adaptor_wrapper : public device_memory_resource_wrapper {

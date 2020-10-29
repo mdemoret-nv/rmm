@@ -310,14 +310,41 @@ cdef class CallbackResourceAdaptor(MemoryResource):
         """
         self._py_callback = py_callback
 
-    cdef void _cy_callback(self, bool isAlloc, void* p, size_t bytes, cudaStream_t stream) with gil:
+    cdef void _cy_callback(self, bool isAlloc, void* p, size_t bytes, cudaStream_t stream) except *:
 
         if (self._py_callback is not None):
-            self._py_callback(isAlloc, <uintptr_t>p, bytes, <uintptr_t>stream)
+            try:
+                self._py_callback(isAlloc, <uintptr_t>p, bytes, <uintptr_t>stream)
+            except:
+                raise
 
     cpdef set_callback(self, object py_callback):
 
         self._py_callback = py_callback
+
+
+cdef class TrackedResourceAdaptor(MemoryResource):
+
+    def __cinit__(self, MemoryResource upstream):
+        self.c_obj.reset(
+            new tracked_resource_adaptor_wrapper(
+                upstream.c_obj
+            )
+        )
+
+    cpdef reset_info(self):
+        (<tracked_resource_adaptor_wrapper*>(self.c_obj.get()))[0].reset_info()
+
+
+    def get_info(self) -> dict:
+        info = (<tracked_resource_adaptor_wrapper*>(self.c_obj.get()))[0].get_info()
+
+        return {
+            "outstanding": info.outstanding_nbytes,
+            "peak": info.peak_nbytes,
+            "count": info.total_nbytes,
+            "nbytes": info.total_count,
+        }
 
 
 class KeyInitializedDefaultDict(defaultdict):
