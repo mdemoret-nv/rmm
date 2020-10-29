@@ -1,19 +1,25 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
+import distutils.file_util
 import glob
 import os
 import re
 import shutil
+import sys
 import sysconfig
-import distutils.file_util
 from distutils.sysconfig import get_python_lib
 
+import versioneer
 from Cython.Build import cythonize
-from setuptools import find_packages, setup
+from setuptools import find_packages
+from setuptools import setup
 from setuptools.extension import Extension
 
-import versioneer
-
 install_requires = ["numba", "cython"]
+
+is_debug = False
+
+if "--debug" in sys.argv:
+    is_debug = True
 
 
 def get_cuda_version_from_header(cuda_include_dir):
@@ -74,9 +80,9 @@ for file_p in preprocess_files:
     if CUDA_VERSION in supported_cuda_versions:
         # Only update the file if it does not exist or is newer
         distutils.file_util.copy_file(
-            os.path.join(cwd, "rmm/_cuda", CUDA_VERSION, pxi_file), 
+            os.path.join(cwd, "rmm/_cuda", CUDA_VERSION, pxi_file),
             os.path.join(cwd, "rmm/_cuda", file_p),
-            update=True
+            update=True,
         )
     else:
         raise TypeError(f"{CUDA_VERSION} is not supported.")
@@ -95,6 +101,11 @@ include_dirs = [
 
 library_dirs = [get_python_lib(), os.path.join(os.sys.prefix, "lib")]
 
+extra_compile_args = ["-std=c++14"]
+
+if is_debug:
+    extra_compile_args.append("-O0")
+
 # lib:
 extensions = cythonize(
     [
@@ -109,13 +120,14 @@ extensions = cythonize(
             ],
             libraries=["cuda", "cudart"],
             language="c++",
-            extra_compile_args=["-std=c++14"],
+            extra_compile_args=extra_compile_args,
         )
     ],
     nthreads=nthreads,
     compiler_directives=dict(
         profile=False, language_level=3, embedsignature=True,
     ),
+    gdb_debug=is_debug,
 )
 
 
@@ -133,13 +145,14 @@ extensions += cythonize(
             ],
             libraries=["cuda", "cudart"],
             language="c++",
-            extra_compile_args=["-std=c++14"],
+            extra_compile_args=extra_compile_args,
         )
     ],
     nthreads=nthreads,
     compiler_directives=dict(
         profile=False, language_level=3, embedsignature=True,
     ),
+    gdb_debug=is_debug,
 )
 
 # tests:
@@ -156,13 +169,14 @@ extensions += cythonize(
             ],
             libraries=["cuda", "cudart"],
             language="c++",
-            extra_compile_args=["-std=c++14"],
+            extra_compile_args=extra_compile_args,
         )
     ],
     nthreads=nthreads,
     compiler_directives=dict(
         profile=True, language_level=3, embedsignature=True, binding=True
     ),
+    gdb_debug=is_debug,
 )
 
 setup(
