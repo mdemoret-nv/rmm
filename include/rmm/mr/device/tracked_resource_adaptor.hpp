@@ -33,6 +33,7 @@
 #include <sstream>
 #include <functional>
 #include <map>
+#include <shared_mutex>
 
 namespace rmm {
 namespace mr {
@@ -50,6 +51,10 @@ namespace mr {
 template <typename Upstream>
 class tracked_resource_adaptor final : public device_memory_resource {
  public:
+
+  // can be a std::shared_mutex once C++17 is adopted
+  using read_lock_t  = std::shared_lock<std::shared_timed_mutex>;
+  using write_lock_t = std::unique_lock<std::shared_timed_mutex>;
 
   struct tracked_info {
     std::size_t outstanding_nbytes{0};
@@ -120,6 +125,9 @@ class tracked_resource_adaptor final : public device_memory_resource {
   }
 
   void reset_info() noexcept {
+
+    write_lock_t lock(mtx_);
+
     this->allocations_.clear();
     this->info_.outstanding_nbytes = 0;
     this->info_.peak_nbytes = 0;
@@ -127,7 +135,10 @@ class tracked_resource_adaptor final : public device_memory_resource {
     this->info_.total_nbytes = 0;
   }
 
-  tracked_info get_info() const noexcept{
+  tracked_info get_info() const noexcept {
+
+    read_lock_t lock(mtx_);
+
     return this->info_;
   }
 
@@ -158,18 +169,22 @@ class tracked_resource_adaptor final : public device_memory_resource {
   void* do_allocate(std::size_t bytes, cudaStream_t stream) override
   {
     auto const p = upstream_->allocate(bytes, stream);
-    
-    auto found = this->allocations_.find(p);
 
-    if (found != this->allocations_.end()){
-      RMM_FAIL("Pointer has already been allocated", rmm::bad_alloc);
+    {
+      write_lock_t lock(mtx_);
+
+      auto emplaced = allocations_.emplace(p, bytes);
+
+      if (!emplaced.second){
+        // RMM_FAIL("Pointer has already been allocated", rmm::bad_alloc);
+        RMM_LOG_ERROR("Pointer has already been allocated");
+      }
+
+      this->info_.outstanding_nbytes += bytes;
+      this->info_.peak_nbytes = std::max(this->info_.outstanding_nbytes, this->info_.peak_nbytes);
+      this->info_.total_nbytes += bytes;
+      this->info_.total_count += 1;
     }
-
-    this->allocations_[p] = bytes;
-    this->info_.outstanding_nbytes += bytes;
-    this->info_.peak_nbytes = std::max(this->info_.outstanding_nbytes, this->info_.peak_nbytes);
-    this->info_.total_nbytes += bytes;
-    this->info_.total_count += 1;
 
     return p;
   }
@@ -194,19 +209,27 @@ class tracked_resource_adaptor final : public device_memory_resource {
   {
     upstream_->deallocate(p, bytes, stream);
 
-    const auto found = this->allocations_.find(p);
+    {
+      write_lock_t lock(mtx_);
+      const auto found = this->allocations_.find(p);
 
-    if (found == this->allocations_.end()){
-      RMM_FAIL("Deallocating a pointer that was not tracked", rmm::bad_alloc);
+      if (found == this->allocations_.end()){
+        // RMM_FAIL("Deallocating a pointer that was not tracked", rmm::bad_alloc);
+        RMM_LOG_ERROR(static_cast<std::ostringstream&&>(std::ostringstream() << "Deallocating a pointer that was not tracked. Ptr:" << p << ", Bytes: " << bytes << ", Alloc Size: " << this->allocations_.size()).str());
+      } else {
+        this->allocations_.erase(found);
+
+        std::size_t other_bytes = found->second;
+
+        if (other_bytes != bytes){
+          // RMM_FAIL("Alloc and Dealloc bytes do not match", rmm::bad_alloc);
+          RMM_LOG_ERROR(static_cast<std::ostringstream&&>(std::ostringstream() << "Alloc bytes (" << other_bytes << ") and Dealloc bytes (" << bytes << ") do not match").str());
+          bytes = other_bytes;
+        }
+      }
+
+      this->info_.outstanding_nbytes -= bytes;
     }
-
-    this->allocations_.erase(found);
-
-    if (found->second != bytes){
-      RMM_FAIL("Alloc and Dealloc bytes do not match", rmm::bad_alloc);
-    }
-
-    this->info_.outstanding_nbytes -= bytes;
   }
 
   /**
@@ -250,6 +273,7 @@ class tracked_resource_adaptor final : public device_memory_resource {
   
   tracked_info info_;
   std::map<void*, size_t> allocations_;
+  std::shared_timed_mutex mutable mtx_;           // mutex for thread safe access to allocations_
 };
 
 // /**

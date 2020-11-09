@@ -342,8 +342,8 @@ cdef class TrackedResourceAdaptor(MemoryResource):
         return {
             "outstanding": info.outstanding_nbytes,
             "peak": info.peak_nbytes,
-            "count": info.total_nbytes,
-            "nbytes": info.total_count,
+            "count": info.total_count,
+            "nbytes": info.total_nbytes,
         }
 
 
