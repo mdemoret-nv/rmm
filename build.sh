@@ -131,15 +131,21 @@ fi
 # Build and install the rmm Python package
 if (( NUMARGS == 0 )) || hasArg rmm; then
     cd "${REPODIR}/python"
+    EXTRA_ARGS=""
+
+    if [[ ${BUILD_TYPE} == "Debug" ]]; then
+        EXTRA_ARGS="${EXTRA_ARGS} --debug"
+    fi
+
     export INSTALL_PREFIX
     if [[ ${INSTALL_TARGET} != "" ]]; then
         echo "building rmm..."
-        python setup.py build_ext --inplace
+        python setup.py build_ext --inplace ${EXTRA_ARGS}
         echo "installing rmm..."
         python setup.py install --single-version-externally-managed --record=record.txt
     else
         echo "building rmm..."
-        python setup.py build_ext --inplace
+        python setup.py build_ext --inplace ${EXTRA_ARGS}
     fi
 
 fi

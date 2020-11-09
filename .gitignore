@@ -46,6 +46,7 @@ wheels/
 *.egg
 pip-log.txt
 pip-delete-this-directory.txt
+python/cython_debug
 
 # Ignore dynamically generated .pxd files
 python/rmm/_cuda/gpu.pxd
