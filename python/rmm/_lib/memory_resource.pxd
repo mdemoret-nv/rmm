@@ -1,10 +1,37 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libc.stdint cimport int8_t
 from libcpp.vector cimport vector
 from libcpp.string cimport string
 from libcpp.memory cimport shared_ptr
+from libcpp.memory cimport unique_ptr
+from libcpp.map cimport map
 
+cdef extern from "<iostream>" namespace "std":
+    cdef cppclass basic_istream[T]:
+        pass
+
+    cdef cppclass basic_ostream[T]:
+        pass
+
+    ctypedef basic_istream[char] istream
+
+    ctypedef basic_ostream[char] ostream
+
+cdef extern from "<sstream>" namespace "std":
+    cdef cppclass basic_ostringstream[T](basic_ostream[T]):
+        basic_ostringstream()
+
+        string str()
+
+    ctypedef basic_ostringstream[char] ostringstream
+
+cdef extern from "rmm/detail/stack_trace.hpp" namespace "rmm::detail" nogil:
+    cdef cppclass stack_trace:
+        stack_trace()
+
+    ostream& operator<<(ostream& os, const stack_trace& st) except +
 
 cdef extern from "memory_resource_wrappers.hpp" nogil:
     cdef cppclass device_memory_resource_wrapper:
@@ -92,12 +119,21 @@ cdef extern from "memory_resource_wrappers.hpp" nogil:
             size_t total_bytes
             size_t total_count
 
+        struct allocation_info:
+            allocation_info(size_t size, bool capture_stack)
+
+            unique_ptr[stack_trace] strace
+            size_t allocation_size
+
+            string get_strace_str() const
+
         tracking_resource_adaptor_wrapper(
             shared_ptr[device_memory_resource_wrapper] upstream_mr
         ) except +
 
         void reset_allocation_counts() except +
         allocation_counts get_allocation_counts() except +
+        map[void*, allocation_info] get_outstanding_allocations()
 
 
 cdef class MemoryResource:
@@ -122,6 +158,10 @@ cdef class LoggingResourceAdaptor(MemoryResource):
     cdef object _log_file_name
     cpdef get_file_name(self)
     cpdef flush(self)
+
+cdef class AllocInfo:
+    cdef public int allocation_size
+    cdef public string stack_str
 
 cdef class TrackingMemoryResource(MemoryResource):
     pass

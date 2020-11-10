@@ -3,11 +3,12 @@ import os
 import warnings
 from collections import defaultdict
 
-from libc.stdint cimport int8_t
+from libc.stdint cimport int8_t, uintptr_t
 from libcpp cimport bool
 from libcpp.cast cimport dynamic_cast
 from libcpp.memory cimport make_shared, make_unique, shared_ptr, unique_ptr
 from libcpp.string cimport string
+from cython.operator cimport dereference
 
 from rmm._cuda.gpu import CUDARuntimeError, cudaError, getDevice, setDevice
 
@@ -307,6 +308,24 @@ cdef class TrackingMemoryResource(MemoryResource):
             "total_bytes": counts.total_bytes,
             "total_count": counts.total_count,
         }
+
+    def get_outstanding_allocations(self) -> dict:
+        c_allocations = (<tracking_resource_adaptor_wrapper*>(
+            self.c_obj.get()))[0].get_outstanding_allocations()
+
+        alloc_dict = {}
+
+        cdef ostringstream oss
+
+        for itr in c_allocations:
+
+            py_stack = AllocInfo()
+            py_stack.allocation_size = itr.second.allocation_size
+            py_stack.stack_str = itr.second.get_strace_str()
+
+            alloc_dict[<uintptr_t>itr.first] = py_stack
+
+        return alloc_dict
 
 
 class KeyInitializedDefaultDict(defaultdict):

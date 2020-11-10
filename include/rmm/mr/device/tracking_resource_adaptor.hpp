@@ -63,6 +63,14 @@ class tracking_resource_adaptor final : public device_memory_resource {
           return capture_stack ? std::make_unique<rmm::detail::stack_trace>() : nullptr;
         }()},
         allocation_size{size} {};
+
+    std::string get_strace_str() const {
+      std::ostringstream oss;
+
+      oss << *strace;
+
+      return oss.str();
+    }
   };
 
   /**

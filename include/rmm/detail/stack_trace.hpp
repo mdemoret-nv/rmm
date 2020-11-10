@@ -74,6 +74,33 @@ class stack_trace {
     return os;
   };
 
+//   std::vector<std::string> to_strings() const {
+//     std::vector<std::string> string_arr;
+
+//     auto t = *this;
+
+//     std::stringstream ss();
+//     ss << (*this);
+
+// #if defined(RMM_ENABLE_STACK_TRACES)
+//     std::unique_ptr<char*, decltype(&::free)> strings(
+//       backtrace_symbols(stack_ptrs.data(), stack_ptrs.size()), &::free);
+
+//     if (strings.get() == nullptr) {
+//       string_arr.emplace_back("But no stack trace could be found!");
+//     } else {
+//       ///@todo: support for demangling of C++ symbol names
+//       for (int i = 0; i < stack_ptrs.size(); ++i) {
+//          string_arr.emplace_back(static_cast<std::ostringstream&&>(std::ostringstream() << "#" << i << " in " << strings.get()[i]).str());
+//       }
+//     }
+// #else
+//     string_arr.emplace("stack traces disabled");
+// #endif  // RMM_ENABLE_STACK_TRACES
+
+//     return string_arr;
+//   }
+
 #if defined(RMM_ENABLE_STACK_TRACES)
  private:
   std::vector<void*> stack_ptrs;

@@ -183,6 +183,9 @@ class tracking_resource_adaptor_wrapper : public device_memory_resource_wrapper 
   typedef rmm::mr::tracking_resource_adaptor<rmm::mr::device_memory_resource>::allocation_counts
     allocation_counts;
 
+  typedef rmm::mr::tracking_resource_adaptor<rmm::mr::device_memory_resource>::allocation_info
+    allocation_info;
+
   tracking_resource_adaptor_wrapper(std::shared_ptr<device_memory_resource_wrapper> upstream_mr)
     : upstream_mr(upstream_mr),
       mr(std::make_shared<rmm::mr::tracking_resource_adaptor<rmm::mr::device_memory_resource>>(
